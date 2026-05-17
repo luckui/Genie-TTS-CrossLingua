@@ -19,13 +19,19 @@
 
 </div>
 
+> **📌 本仓库为社区 Fork**，上游项目为 [High-Logic/Genie](https://github.com/High-Logic/Genie)，
+> 由 [@luckui](https://github.com/luckui) 维护。
+> 本 Fork 新增：**跨语言语音合成**与 `auto` 自动语言检测，
+> 无论参考音频是什么语言，都能以任意目标语言合成。
+> 详见 [本 Fork 的改动](#-本-fork-的改动) 一节。
+
 ---
 
 **GENIE** 是一个基于开源 TTS 项目 [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) 构建的轻量级推理引擎。它集成了 TTS
 推理、ONNX 模型转换、API 服务端以及其他核心功能，旨在提供极致的性能和便利性。
 
 * **✅ 支持的模型版本：** GPT-SoVITS V2, V2ProPlus
-* **✅ 支持的语言：** 日语、英语、中文、韩语
+* **✅ 支持的语言：** 日语、英语、中文、韩语，以及 **`auto` 自动检测**（本 Fork 新增）
 * **✅ 支持的 Python 版本：** >= 3.9
 
 ---
@@ -147,6 +153,9 @@ genie.set_reference_audio(
     character_name='<CHARACTER_NAME>',  # 必须与加载的角色名称匹配
     audio_path=r"<PATH_TO_REFERENCE_AUDIO>",  # 参考音频的路径
     audio_text="<REFERENCE_AUDIO_TEXT>",  # 对应的文本
+    # ref_language：参考音频文字的语言（本 Fork 新增）
+    # 默认与模型语言一致；跨语言合成时请明确指定。
+    ref_language='<LANGUAGE_CODE>',  # 如 'zh', 'en', 'ja', 'ko', 'auto'
 )
 
 # 第三步：运行 TTS 推理并生成音频
@@ -155,11 +164,74 @@ genie.tts(
     text="<TEXT_TO_SYNTHESIZE>",  # 要合成的文本
     play=True,  # 直接播放音频
     save_path="<OUTPUT_AUDIO_PATH>",  # 输出音频文件路径
+    # text_language：合成文本的语言（本 Fork 新增）
+    # 'auto' 按句自动检测；或指定 'zh', 'en', 'ja', 'ko'。
+    text_language='auto',
 )
 
 genie.wait_for_playback_done()  # 确保音频播放完成
 
 print("🎉 Audio generation complete!")
+```
+
+---
+
+## 🌍 跨语言合成 *(本 Fork 新增)*
+
+本 Fork 实现了**参考音频语言**与**合成文本语言**的独立控制，
+可以以一种语言的音色克隆另一种语言的语音，不损失音质。
+
+### 新增参数
+
+| 参数 | 位置 | 说明 |
+|------|------|------|
+| `text_language` | `tts()`, `tts_async()` | 合成文本的语言。`'auto'` 使用 [`langdetect`](https://pypi.org/project/langdetect/) 按句自动检测。 |
+| `ref_language` | `set_reference_audio()` | 参考音频文字的语言，与 `text_language` 独立设置。 |
+| `'auto'` | 两者均支持 | 自动路由到对应的 G2P + BERT 流水线。 |
+
+### 示例：中文音色 → 日语语音
+
+```python
+import genie_tts as genie
+
+genie.load_character(
+    character_name='feibi',
+    onnx_model_dir=r"<菲比 ONNX 模型目录>",
+    language='auto',  # 现支持 'auto'
+)
+
+# 参考音频是中文，但要合成日语
+genie.set_reference_audio(
+    character_name='feibi',
+    audio_path=r"<中文参考音频.wav>",
+    audio_text="你好，这是一段中文参考音频。",
+    ref_language='zh',     # 参考音频语言
+)
+
+genie.tts(
+    character_name='feibi',
+    text='こんにちは、今日はいい天気ですね。',
+    play=True,
+    text_language='ja',    # 合成文本语言
+)
+```
+
+使用 `text_language='auto'` 处理中英混合文本：
+
+```python
+genie.tts(
+    character_name='feibi',
+    text='Hello，今天天気真好，let\'s go！',
+    play=True,
+    text_language='auto',  # 按句自动检测中文/英文
+)
+```
+
+### 测试
+
+```bash
+pip install langdetect  # auto 检测所需依赖
+python test_crosslang.py
 ```
 
 ---
@@ -205,6 +277,30 @@ genie.start_server(
 
 > 关于请求格式和 API 详情，请参阅我们的 [API 服务教程](./Tutorial/English/API%20Server%20Tutorial.py)。
 
+### 独立服务脚本 *(本 Fork 新增)*
+
+本 Fork 提供两个额外的服务器脚本：
+
+| 脚本 | 端口 | 适用场景 |
+|------|------|----------|
+| `api.py` | 9881 | **开发 / 测试** — 每次请求可上传任意参考音频，通过 `POST /load` 指定模型目录。 |
+| `server.py` | 9882 | **生产部署** — 启动时预加载 `CharacterModels/`；启用推理锁和断连检测；与 [live2d-pet](https://github.com/luckui/live2d-pet) 集成兼容。 |
+
+**开发快速启动：**
+
+```bash
+pip install fastapi uvicorn langdetect
+uvicorn api:app --host 0.0.0.0 --port 9881
+```
+
+**生产部署快速启动：**
+
+```bash
+# 将角色 ONNX 模型放入 CharacterModels/v2ProPlus/<角色名>/tts_models/ 目录
+pip install fastapi uvicorn pyyaml langdetect
+uvicorn server:app --host 127.0.0.1 --port 9882
+```
+
 
 ---
 
@@ -213,6 +309,8 @@ genie.start_server(
 * [x] **🌐 语言扩展**
 
     * [x] 添加对 **中文** 和 **英文** 的支持。
+    * [x] **`auto` 自动语言检测** — 支持混合语言文本按句检测 *(本 Fork 新增)*。
+    * [x] **跨语言音色克隆** — `ref_language` / `text_language` 参数独立控制 *(本 Fork 新增)*。
 
 * [x] **🚀 模型兼容性**
 
@@ -222,6 +320,15 @@ genie.start_server(
 * [x] **📦 简易部署**
 
     * [ ] 发布 **官方 Docker 镜像**。
-    * [x] 提供开箱即用的 **Windows 整合包**。
+    * [x] 提供开筱即用的 **Windows 整合包**。
+    * [x] 独立 FastAPI 适配服务器（`server.py`）*(本 Fork 新增)*。
 
 ---
+
+## 🙏 致谢
+
+本项目来自 **[GENIE](https://github.com/High-Logic/Genie)**
+由 [High-Logic](https://github.com/High-Logic) 创建和维护。所有核心推理、模型转换与 ONNX 优化均源自上游项目。
+
+如果你觉得 GENIE 有用，请给上游项目 ⭐：
+**https://github.com/High-Logic/Genie**

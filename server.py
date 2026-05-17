@@ -32,6 +32,12 @@ from pydantic import BaseModel
 
 THIS_DIR = Path(__file__).parent.resolve()
 
+# 从源码目录运行时，将 src/ 加入 Python 路径（pip install -e . 的用户无需此行）
+_src_dir = THIS_DIR / "src"
+if _src_dir.exists():
+    import sys as _sys
+    _sys.path.insert(0, str(_src_dir))
+
 # GENIE_DATA_DIR 必须在任何 genie_tts import 之前设置
 # Resources.py 在模块加载时读取此环境变量
 os.environ.setdefault("GENIE_DATA_DIR", str(THIS_DIR / "GenieData"))

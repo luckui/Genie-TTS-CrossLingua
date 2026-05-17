@@ -19,6 +19,13 @@
 
 </div>
 
+> **📌 This is a community fork** of [GENIE](https://github.com/High-Logic/Genie) by
+> [High-Logic](https://github.com/High-Logic), maintained by
+> [@luckui](https://github.com/luckui). Added in this fork:
+> **cross-lingual synthesis** with `auto` language detection — synthesize in any
+> language regardless of the reference audio's language.
+> See the [Changes in this Fork](#-changes-in-this-fork) section for details.
+
 ---
 
 **GENIE** is a lightweight inference engine built on the open-source TTS
@@ -26,7 +33,7 @@ project [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS). It integrates TTS 
 server, and other core features, aiming to provide ultimate performance and convenience.
 
 * **✅ Supported Model Version:** GPT-SoVITS V2, V2ProPlus
-* **✅ Supported Language:** Japanese, English, Chinese, Korean
+* **✅ Supported Language:** Japanese, English, Chinese, Korean, and **`auto` detection** (this fork)
 * **✅ Supported Python Version:** >= 3.9
 
 ---
@@ -153,6 +160,9 @@ genie.set_reference_audio(
     character_name='<CHARACTER_NAME>',  # Must match loaded character name
     audio_path=r"<PATH_TO_REFERENCE_AUDIO>",  # Path to reference audio
     audio_text="<REFERENCE_AUDIO_TEXT>",  # Corresponding text
+    # ref_language: language of the reference audio text (this fork)
+    # Defaults to the model language; set explicitly for cross-lingual use.
+    ref_language='<LANGUAGE_CODE>',  # e.g. 'zh', 'en', 'ja', 'ko', 'auto'
 )
 
 # Step 3: Run TTS inference and generate audio
@@ -161,11 +171,77 @@ genie.tts(
     text="<TEXT_TO_SYNTHESIZE>",  # Text to synthesize
     play=True,  # Play audio directly
     save_path="<OUTPUT_AUDIO_PATH>",  # Output audio file path
+    # text_language: language of the synthesis text (this fork)
+    # 'auto' detects per-sentence; or specify 'zh', 'en', 'ja', 'ko'.
+    text_language='auto',
 )
 
 genie.wait_for_playback_done()  # Ensure audio playback completes
 
 print("🎉 Audio generation complete!")
+```
+
+---
+
+## 🌍 Cross-Lingual Synthesis *(this fork)*
+
+This fork adds independent control over the **reference audio language** and the
+**synthesis text language**, enabling cloning a voice in one language and
+synthesizing speech in another — without quality degradation.
+
+### New parameters
+
+| Parameter | Where | Description |
+|-----------|-------|-------------|
+| `text_language` | `tts()`, `tts_async()` | Language of the text to synthesize. `'auto'` detects per-sentence using [`langdetect`](https://pypi.org/project/langdetect/). |
+| `ref_language` | `set_reference_audio()` | Language of the reference audio transcript. Decoupled from `text_language`. |
+| `'auto'` | both | New language value accepted everywhere; auto-routes to the correct G2P + BERT pipeline. |
+
+### Example: Chinese voice → Japanese speech
+
+```python
+import genie_tts as genie
+
+genie.load_character(
+    character_name='feibi',
+    onnx_model_dir=r"<PATH_TO_FEIBI_ONNX_DIR>",
+    language='auto',  # 'auto' is now accepted
+)
+
+# Reference audio is Chinese, but we synthesize in Japanese
+genie.set_reference_audio(
+    character_name='feibi',
+    audio_path=r"<PATH_TO_CHINESE_REF.wav>",
+    audio_text="你好，这是一段中文参考音频。",
+    ref_language='zh',     # reference audio language
+)
+
+genie.tts(
+    character_name='feibi',
+    text='こんにちは、今日はいい天気ですね。',
+    play=True,
+    text_language='ja',    # synthesis text language
+)
+```
+
+Use `text_language='auto'` to handle mixed-language text automatically:
+
+```python
+genie.tts(
+    character_name='feibi',
+    text='Hello, 今天天气真好，let\'s go！',
+    play=True,
+    text_language='auto',  # detects zh / en per sentence
+)
+```
+
+### Testing
+
+Run the included test suite to verify cross-lingual output:
+
+```bash
+pip install langdetect  # required for auto detection
+python test_crosslang.py
 ```
 
 ---
@@ -211,6 +287,30 @@ genie.start_server(
 
 > For request formats and API details, see our [API Server Tutorial](./Tutorial/English/API%20Server%20Tutorial.py).
 
+### Alternative standalone servers *(this fork)*
+
+This fork ships two additional server scripts:
+
+| Script | Port | Best for |
+|--------|------|----------|
+| `api.py` | 9881 | **Development / testing** — upload any reference audio per request; specify any ONNX model dir via `POST /load`. No pre-configured characters needed. |
+| `server.py` | 9882 | **Production deployment** — pre-loads a `CharacterModels/` directory at startup; asyncio inference lock; per-chunk disconnect detection; compatible with [live2d-pet](https://github.com/luckui/live2d-pet) integration. |
+
+**Quick start (development):**
+
+```bash
+pip install fastapi uvicorn langdetect
+uvicorn api:app --host 0.0.0.0 --port 9881
+```
+
+**Quick start (production):**
+
+```bash
+# Place character ONNX dirs under CharacterModels/v2ProPlus/<char_name>/tts_models/
+pip install fastapi uvicorn pyyaml langdetect
+uvicorn server:app --host 127.0.0.1 --port 9882
+```
+
 
 ---
 
@@ -219,6 +319,10 @@ genie.start_server(
 * [x] **🌐 Language Expansion**
 
     * [x] Add support for **Chinese** and **English**.
+    * [x] **`auto` language detection** — per-sentence language detection for
+          mixed-language text *(this fork)*.
+    * [x] **Cross-lingual voice cloning** — independent `ref_language` /
+          `text_language` parameters *(this fork)*.
 
 * [x] **🚀 Model Compatibility**
 
@@ -229,5 +333,18 @@ genie.start_server(
 
     * [ ] Release **Official Docker images**.
     * [x] Provide out-of-the-box **Windows bundles**.
+    * [x] Standalone FastAPI adapter server (`server.py`) *(this fork)*.
+
+---
+
+## 🙏 Acknowledgements
+
+This project is a community fork of
+**[GENIE](https://github.com/High-Logic/Genie)** created and maintained by
+[High-Logic](https://github.com/High-Logic). All core inference, model
+conversion, and ONNX optimization work originates from their project.
+
+Please ⭐ the upstream repository if you find GENIE useful:
+**https://github.com/High-Logic/Genie**
 
 ---
