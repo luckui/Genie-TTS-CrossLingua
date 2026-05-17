@@ -108,8 +108,8 @@ def _load_character(char_name: str, version: str = "v2ProPlus") -> Optional[Char
     prompt_wav_path = str(prompt_wav_dir / preset["wav"])
     prompt_text = preset["text"]
 
-    # 参考音频语言：根据文本内容粗判断（均为中文）
-    ref_language = "Chinese"
+    # 参考音频语言：使用 auto 自动检测——跨语言功能的核心用途
+    ref_language = "auto"
 
     try:
         genie.load_character(
