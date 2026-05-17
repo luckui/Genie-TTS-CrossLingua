@@ -92,7 +92,7 @@ class TTSPlayer:
                     stage_decoder=gsv_model.T2S_STAGE_DECODER,
                     vocoder=gsv_model.VITS,
                     prompt_encoder=gsv_model.PROMPT_ENCODER,
-                    language=gsv_model.LANGUAGE,
+                    language=context.text_language if context.text_language else gsv_model.LANGUAGE,
                 )
 
                 if audio_chunk is not None:

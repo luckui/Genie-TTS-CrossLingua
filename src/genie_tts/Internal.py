@@ -107,15 +107,12 @@ def load_character(
     check_onnx_model_dir(onnx_model_dir)
 
     language = normalize_language(language)
-    if language not in ['Japanese', 'English', 'Chinese', 'Hybrid-Chinese-English', 'Korean']:
+    if language not in ['Japanese', 'English', 'Chinese', 'Hybrid-Chinese-English', 'Korean', 'auto']:
         raise ValueError('Unknown language')
 
-    if language == 'Chinese':
+    if language in ('Chinese', 'Hybrid-Chinese-English', 'auto'):
         ensure_exists(Chinese_G2P_DIR, "Chinese_G2P_DIR")
-    elif language == 'English':
-        ensure_exists(English_G2P_DIR, "English_G2P_DIR")
-    elif language == 'Hybrid-Chinese-English':
-        ensure_exists(Chinese_G2P_DIR, "Chinese_G2P_DIR")
+    if language in ('English', 'Hybrid-Chinese-English', 'auto'):
         ensure_exists(English_G2P_DIR, "English_G2P_DIR")
 
     model_path: str = os.fspath(onnx_model_dir)
@@ -145,6 +142,7 @@ def set_reference_audio(
         audio_path: Union[str, PathLike],
         audio_text: str,
         language: str = None,
+        ref_language: str = None,
 ) -> None:
     """
     Sets the reference audio for a character to be used for voice cloning.
@@ -155,7 +153,8 @@ def set_reference_audio(
         character_name (str): The name of the character.
         audio_path (str | PathLike): The file path to the reference audio (e.g., a WAV file).
         audio_text (str): The transcript of the reference audio.
-        language (str): The language of the reference audio.
+        language (str): The *target* language for synthesis (used as default if ref_language not provided).
+        ref_language (str): The language of the reference audio text. If None, falls back to `language`.
     """
     audio_path: str = os.fspath(audio_path)
 
@@ -174,19 +173,26 @@ def set_reference_audio(
         else:
             raise ValueError('No language specified')
     language = normalize_language(language)
-    if language not in ['Japanese', 'English', 'Chinese', 'Hybrid-Chinese-English', 'Korean']:
+    if language not in ['Japanese', 'English', 'Chinese', 'Hybrid-Chinese-English', 'Korean', 'auto']:
         raise ValueError('Unknown language')
+
+    # ref_language 独立控制参考音频文本的 G2P 语言，不影响目标文本
+    if ref_language is None:
+        ref_language = language
+    ref_language = normalize_language(ref_language)
+    if ref_language not in ['Japanese', 'English', 'Chinese', 'Hybrid-Chinese-English', 'Korean', 'auto']:
+        raise ValueError('Unknown ref_language')
 
     _reference_audios[character_name] = {
         'audio_path': audio_path,
         'audio_text': audio_text,
         'language': language,
+        'ref_language': ref_language,
     }
-    # print(_reference_audios[character_name])
     context.current_prompt_audio = ReferenceAudio(
         prompt_wav=audio_path,
         prompt_text=audio_text,
-        language=language,
+        language=ref_language,
     )
 
 
@@ -196,6 +202,7 @@ async def tts_async(
         play: bool = False,
         split_sentence: bool = False,
         save_path: Union[str, PathLike, None] = None,
+        text_language: str = None,
 ) -> AsyncIterator[bytes]:
     """
     Asynchronously generates speech from text and yields audio chunks.
@@ -236,10 +243,11 @@ async def tts_async(
 
     # 设置 TTS 上下文
     context.current_speaker = character_name
+    context.text_language = normalize_language(text_language) if text_language else None
     context.current_prompt_audio = ReferenceAudio(
         prompt_wav=_reference_audios[character_name]['audio_path'],
         prompt_text=_reference_audios[character_name]['audio_text'],
-        language=_reference_audios[character_name]['language'],
+        language=_reference_audios[character_name]['ref_language'],
     )
 
     # 3. 使用新的回调接口启动 TTS 会话
@@ -268,6 +276,7 @@ def tts(
         play: bool = False,
         split_sentence: bool = True,
         save_path: Union[str, PathLike, None] = None,
+        text_language: str = None,
 ) -> None:
     """
     Synchronously generates speech from text.
@@ -293,10 +302,11 @@ def tts(
             os.makedirs(parent_dir, exist_ok=True)
 
     context.current_speaker = character_name
+    context.text_language = normalize_language(text_language) if text_language else None
     context.current_prompt_audio = ReferenceAudio(
         prompt_wav=_reference_audios[character_name]['audio_path'],
         prompt_text=_reference_audios[character_name]['audio_text'],
-        language=_reference_audios[character_name]['language'],
+        language=_reference_audios[character_name]['ref_language'],
     )
 
     tts_player.start_session(

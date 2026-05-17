@@ -30,7 +30,11 @@ language_map = {
     "ko": "Korean",
     "kr": "Korean",
     "hangul": "Korean",
-    
+
+    # Auto-detect
+    "auto": "auto",
+    "自动": "auto",
+    "自动检测": "auto",
 }
 
 

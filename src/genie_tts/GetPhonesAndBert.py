@@ -5,6 +5,27 @@ from .Utils.Constants import BERT_FEATURE_DIM
 from .ModelManager import model_manager
 
 
+def detect_language_auto(text: str) -> str:
+    """
+    通过字符特征自动检测文本语言。
+    优先级: 韩文 > 日文假名 > 中日混合(含假名) > 中英混合 > 中文 > 英文
+    """
+    has_kana = bool(re.search(r'[\u3040-\u30ff]', text))           # 平/片假名
+    has_korean = bool(re.search(r'[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]', text))
+    has_cjk = bool(re.search(r'[\u4e00-\u9fff\u3400-\u4dbf]', text))
+    has_latin = bool(re.search(r'[a-zA-Z]', text))
+
+    if has_korean:
+        return 'Korean'
+    if has_kana:
+        return 'Japanese'
+    if has_cjk and has_latin:
+        return 'Hybrid-Chinese-English'
+    if has_cjk:
+        return 'Chinese'
+    return 'English'
+
+
 # 不同的 RoBERTa ONNX 导出结果，输入名可能并不完全一致
 # （例如有些需要 token_type_ids，有些接受 repeats）。
 # 这里改成动态构造输入，避免假设只有一种固定导出签名。
@@ -85,6 +106,9 @@ def split_language(text: str) -> list[dict[Literal['language', 'content'], str]]
 
 def get_phones_and_bert(prompt_text: str, language: str = 'japanese') -> Tuple[np.ndarray, np.ndarray]:
     """获取 phones 序列和 bert 特征, 考虑混合语言问题"""
+
+    if language.lower() == 'auto':
+        language = detect_language_auto(prompt_text)
 
     if language.lower() == 'hybrid-chinese-english':
         split = split_language(prompt_text)
