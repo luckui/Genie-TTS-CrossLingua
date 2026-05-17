@@ -29,7 +29,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 # GenieData 路径：优先用环境变量，否则自动找打包版目录
-_default_genie_data = os.path.join(os.path.dirname(__file__), "..", "Genie-TTS GUI", "GenieData")
+_default_genie_data = os.path.join(os.path.dirname(__file__), "GenieData")
 os.environ.setdefault("GENIE_DATA_DIR", os.path.abspath(_default_genie_data))
 
 import asyncio

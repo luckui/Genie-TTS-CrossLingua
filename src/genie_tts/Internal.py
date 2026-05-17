@@ -400,6 +400,7 @@ def load_predefined_character(character_name: str) -> None:
         'audio_path': audio_path,
         'audio_text': audio_text,
         'language': CHARA_LANG[character_name],
+        'ref_language': CHARA_LANG[character_name],
     }
     context.current_prompt_audio = ReferenceAudio(
         prompt_wav=audio_path,
